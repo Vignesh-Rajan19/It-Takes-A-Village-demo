@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>It Takes a Village</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0D1B24;
+  --yellow: #F5C430;
+  --coral: #E07252;
+  --sage: #5BA08A;
+  --text: #EDE8DF;
+  --dark: #0D1B24;
+  --muted: #6A8A9A;
+  --surface: rgba(255,255,255,0.06);
+  --border: rgba(255,255,255,0.12);
+  --fd: 'DM Serif Display', Georgia, serif;
+  --fb: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+html, body {
+  width: 100%; min-height: 100vh;
+  background: #07121a;
+  color: var(--text);
+  font-family: var(--fb);
+  overflow-x: hidden;
+}
+
+.app {
+  max-width: 430px;
+  min-height: 100vh;
+  margin: 0 auto;
+  background: var(--bg);
+  position: relative;
+  box-shadow: 0 0 60px rgba(0,0,0,0.6);
+}
+
+/* ── SCREENS ── */
+.screen {
+  display: none;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.screen.active { display: flex; animation: fadeUp 0.35s ease; }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── HEADER ── */
+.hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 22px 12px;
+}
+.logo {
+  font-family: var(--fd);
+  font-size: 17px;
+  letter-spacing: -0.2px;
+}
+.logo em { color: var(--yellow); font-style: normal; }
+
+.v-badge {
+  display: flex; align-items: center; gap: 5px;
+  background: rgba(91,160,138,0.13);
+  border: 1px solid rgba(91,160,138,0.38);
+  border-radius: 100px;
+  padding: 5px 11px;
+  font-size: 9.5px; font-weight: 700;
+  letter-spacing: 1.4px; text-transform: uppercase;
+  color: var(--sage);
+}
+.v-badge::before { content: '✓'; font-size: 10px; font-weight: 800; }
+
+/* ── PROGRESS ── */
+.progress {
+  display: flex; gap: 5px; justify-content: center;
+  padding: 2px 0 14px;
+}
+.pdot {
+  width: 6px; height: 6px; border-radius: 3px;
+  background: rgba(255,255,255,0.12);
+  transition: all 0.3s;
+}
+.pdot.on { background: var(--yellow); width: 22px; }
+
+/* ── CONTENT ── */
+.content { flex: 1; padding: 4px 22px 36px; overflow-y: auto; }
+
+.step-lbl {
+  font-size: 9.5px; font-weight: 700;
+  letter-spacing: 2.5px; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 10px;
+}
+.scr-title {
+  font-family: var(--fd);
+  font-size: 30px; line-height: 1.12;
+  color: var(--text); margin-bottom: 6px;
+}
+.scr-sub {
+  font-size: 13px; color: var(--muted);
+  line-height: 1.65; font-weight: 300;
+  margin-bottom: 26px;
+}
+
+/* ── FIELDS ── */
+.field { margin-bottom: 22px; }
+.flabel {
+  display: block;
+  font-size: 9.5px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--yellow); margin-bottom: 9px;
+}
+
+input[type="text"], input[type="email"] {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 14px 16px;
+  color: var(--text);
+  font-family: var(--fb);
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s;
+  -webkit-appearance: none;
+}
+input[type="text"]:focus, input[type="email"]:focus { border-color: var(--yellow); }
+input::placeholder { color: var(--muted); }
+
+/* ── MAP ── */
+.map-wrap {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  position: relative;
+  height: 190px;
+}
+#map { width: 100%; height: 100%; }
+.map-bar {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: rgba(7,18,26,0.88);
+  backdrop-filter: blur(4px);
+  padding: 8px 12px;
+  display: flex; align-items: center; gap: 8px;
+  z-index: 1000;
+  font-size: 12px; color: var(--text);
+}
+.map-dot {
+  width: 8px; height: 8px;
+  background: var(--yellow); border-radius: 50%;
+  flex-shrink: 0;
+  animation: blink 1.6s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+/* ── STEPPER ── */
+.stepper {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 16px;
+}
+.sp-btn {
+  width: 38px; height: 38px;
+  border-radius: 50%; border: 1px solid var(--border);
+  background: none; color: var(--text);
+  font-size: 22px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.18s; flex-shrink: 0;
+  font-family: var(--fb);
+}
+.sp-btn:active { background: var(--yellow); color: var(--dark); border-color: var(--yellow); }
+.sp-val {
+  font-family: var(--fd);
+  font-size: 28px; flex: 1; text-align: center;
+}
+.sp-val.sm { font-size: 18px; font-family: var(--fb); font-weight: 600; }
+
+/* ── CHIPS ── */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  padding: 9px 15px;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  font-size: 13px; font-weight: 500;
+  color: var(--muted); cursor: pointer;
+  transition: all 0.18s;
+  background: none; font-family: var(--fb);
+  -webkit-appearance: none;
+}
+.chip.on {
+  background: var(--yellow);
+  border-color: var(--yellow);
+  color: var(--dark); font-weight: 700;
+}
+
+/* ── PRIMARY BUTTON ── */
+.btn-p {
+  width: 100%; padding: 17px;
+  background: var(--yellow); border: none;
+  border-radius: 14px; font-family: var(--fb);
+  font-size: 15px; font-weight: 700;
+  color: var(--dark); cursor: pointer;
+  transition: all 0.18s; margin-top: 6px;
+  letter-spacing: 0.3px;
+  -webkit-appearance: none;
+}
+.btn-p:active { opacity: 0.88; transform: scale(0.99); }
+
+.back-btn {
+  background: none; border: none;
+  color: var(--muted); font-family: var(--fb);
+  font-size: 13px; cursor: pointer;
+  padding: 4px 0;
+  display: flex; align-items: center; gap: 5px;
+}
+.back-btn:hover { color: var(--text); }
+
+/* ── CALENDAR ── */
+.cal-month {
+  font-family: var(--fd); font-size: 15px;
+  text-align: center; margin-bottom: 12px;
+  color: var(--text);
+}
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+.cal-day-lbl {
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+  color: var(--muted); text-align: center; padding: 4px 0;
+}
+.cal-cell {
+  aspect-ratio: 1; display: flex;
+  align-items: center; justify-content: center;
+  border-radius: 8px; font-size: 13px; font-weight: 500;
+  color: var(--muted); border: 1px solid transparent;
+  transition: all 0.15s;
+}
+.cal-cell.avail { color: var(--text); cursor: pointer; }
+.cal-cell.avail:hover { border-color: var(--border); }
+.cal-cell.today { border-color: rgba(255,255,255,0.2); color: var(--text); cursor: pointer; }
+.cal-cell.picked { background: var(--yellow); color: var(--dark); font-weight: 700; border-color: var(--yellow); }
+
+/* ── TIME SLOTS ── */
+.time-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.tslot {
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 11px; cursor: pointer;
+  transition: all 0.18s; text-align: left;
+  font-family: var(--fb); -webkit-appearance: none;
+}
+.tslot.on {
+  background: rgba(245,196,48,0.1);
+  border-color: var(--yellow);
+}
+.ts-name { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.ts-time { font-size: 10px; color: var(--muted); font-weight: 300; }
+
+/* ── SCREEN 3: MATCHING ── */
+#s3 {
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 40px 30px;
+  text-align: center;
+  position: relative;
+}
+
+.pulse-wrap {
+  position: relative; width: 170px; height: 170px;
+  margin: 0 auto 36px;
+}
+.pring {
+  position: absolute; border-radius: 50%;
+  border: 1.5px solid var(--yellow);
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  animation: pout 2.6s ease-out infinite;
+}
+.pring:nth-child(1) { animation-delay: 0s; }
+.pring:nth-child(2) { animation-delay: 0.75s; }
+.pring:nth-child(3) { animation-delay: 1.5s; }
+@keyframes pout {
+  0%   { width: 54px; height: 54px; opacity: 0.85; border-width: 2px; }
+  100% { width: 170px; height: 170px; opacity: 0; border-width: 0.5px; }
+}
+.pcenter {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  width: 54px; height: 54px;
+  background: var(--yellow); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; z-index: 2;
+}
+.fnode {
+  position: absolute; width: 34px; height: 34px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; font-size: 16px;
+  opacity: 0; animation: floatin 0.45s ease forwards;
+}
+@keyframes floatin {
+  from { opacity:0; transform:scale(0); }
+  to   { opacity:1; transform:scale(1); }
+}
+.match-ttl {
+  font-family: var(--fd); font-size: 28px;
+  color: var(--text); margin-bottom: 10px;
+  transition: color 0.4s;
+}
+.match-sub-txt {
+  font-size: 13px; color: var(--muted);
+  line-height: 1.65; font-weight: 300;
+}
+
+/* ── SCREEN 4: MATCH ── */
+#s4 { padding: 0; }
+.match-body {
+  flex: 1; display: flex; flex-direction: column;
+  padding: 22px 22px 30px;
+}
+
+.mbadge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(91,160,138,0.13);
+  border: 1px solid rgba(91,160,138,0.38);
+  border-radius: 100px; padding: 6px 13px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--sage); margin-bottom: 18px;
+  align-self: flex-start;
+}
+.mbadge::before { content: '✦'; margin-right: 2px; }
+
+.match-name {
+  font-family: var(--fd); font-size: 34px;
+  color: var(--text); line-height: 1.1; margin-bottom: 5px;
+}
+.match-name span { color: var(--yellow); }
+.match-dist {
+  font-size: 12px; color: var(--muted);
+  margin-bottom: 22px; font-weight: 300;
+}
+
+/* Family card */
+.fcard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px; padding: 18px;
+  margin-bottom: 14px; position: relative;
+  overflow: hidden;
+}
+.fcard::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--yellow), var(--coral));
+}
+.favatar-row {
+  display: flex; align-items: center;
+  gap: 14px; margin-bottom: 16px;
+}
+.favatar {
+  width: 56px; height: 56px;
+  background: rgba(245,196,48,0.12);
+  border: 1px solid rgba(245,196,48,0.28);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; flex-shrink: 0;
+}
+.fname { font-family: var(--fd); font-size: 20px; color: var(--text); }
+.fcomp { font-size: 12px; color: var(--muted); margin-top: 2px; font-weight: 300; }
+
+.fdetail-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 9px; margin-bottom: 14px;
+}
+.fdetail {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 9px; padding: 10px 12px;
+}
+.dlbl {
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--yellow); margin-bottom: 4px;
+}
+.dval { font-size: 13px; font-weight: 500; color: var(--text); }
+
+.ctags { display: flex; flex-wrap: wrap; gap: 6px; }
+.ctag {
+  padding: 4px 10px;
+  background: rgba(91,160,138,0.1);
+  border: 1px solid rgba(91,160,138,0.28);
+  border-radius: 100px; font-size: 10px;
+  font-weight: 600; color: var(--sage);
+}
+
+/* Why matched */
+.why-box {
+  background: rgba(245,196,48,0.05);
+  border: 1px solid rgba(245,196,48,0.14);
+  border-radius: 11px; padding: 14px 16px;
+  margin-bottom: 18px;
+}
+.why-lbl {
+  font-size: 9.5px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--yellow); margin-bottom: 6px;
+}
+.why-txt { font-size: 12px; color: var(--muted); line-height: 1.7; font-weight: 300; }
+
+/* Action row */
+.action-row {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 11px; margin-top: auto;
+}
+.btn-decline {
+  padding: 16px; background: none;
+  border: 1px solid rgba(224,114,82,0.38);
+  border-radius: 14px; font-family: var(--fb);
+  font-size: 15px; font-weight: 700;
+  color: var(--coral); cursor: pointer;
+  transition: all 0.18s; -webkit-appearance: none;
+}
+.btn-decline:active { background: rgba(224,114,82,0.1); }
+.btn-accept {
+  padding: 16px; background: var(--sage);
+  border: none; border-radius: 14px;
+  font-family: var(--fb); font-size: 15px;
+  font-weight: 700; color: white;
+  cursor: pointer; transition: all 0.18s;
+  -webkit-appearance: none;
+}
+.btn-accept:active { opacity: 0.88; }
+
+/* ── SCREEN 5: SUCCESS ── */
+#s5 {
+  align-items: center; justify-content: center;
+  text-align: center; padding: 50px 28px;
+  min-height: 100vh;
+}
+.s-icon {
+  width: 84px; height: 84px;
+  background: rgba(91,160,138,0.13);
+  border: 1px solid rgba(91,160,138,0.35);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 38px; margin-bottom: 24px;
+  animation: pop 0.45s cubic-bezier(0.175,0.885,0.32,1.275) forwards;
+}
+@keyframes pop { from{transform:scale(0)} to{transform:scale(1)} }
+.s-title {
+  font-family: var(--fd); font-size: 34px;
+  color: var(--text); margin-bottom: 12px; line-height: 1.1;
+}
+.s-sub {
+  font-size: 13px; color: var(--muted);
+  line-height: 1.7; font-weight: 300;
+  max-width: 300px; margin: 0 auto 28px;
+}
+.next-steps {
+  width: 100%; background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px; padding: 18px;
+  text-align: left; max-width: 360px;
+  margin-bottom: 32px;
+}
+.ns-lbl {
+  font-size: 9.5px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--yellow); margin-bottom: 14px;
+}
+.ns-row {
+  display: flex; gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 10px; font-size: 13px; color: var(--muted);
+}
+.ns-row:last-child { margin-bottom: 0; }
+.ns-n {
+  color: var(--sage); font-weight: 700;
+  font-size: 13px; flex-shrink: 0; padding-top: 1px;
+}
+.s-footer {
+  font-family: var(--fd); font-style: italic;
+  font-size: 15px; color: var(--muted);
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ─── SCREEN 1: SIGN UP ─── -->
+  <div class="screen active" id="s1">
+    <div class="hdr">
+      <div class="logo">It Takes a <em>Village</em></div>
+      <div class="v-badge">PostIdent Verified</div>
+    </div>
+    <div class="progress">
+      <div class="pdot on"></div>
+      <div class="pdot"></div>
+    </div>
+    <div class="content">
+      <div class="step-lbl">Step 1 of 2</div>
+      <h1 class="scr-title">Tell us about<br>your family</h1>
+      <p class="scr-sub">We only share what you choose. Every profile is PostIdent verified.</p>
+
+      <div class="field">
+        <label class="flabel">Family Name</label>
+        <input type="text" id="fname-in" placeholder="e.g. Müller, Schmidt…">
+      </div>
+
+      <div class="field">
+        <label class="flabel">Your Email</label>
+        <input type="email" id="email-in" placeholder="you@example.com">
+      </div>
+
+      <div class="field">
+        <label class="flabel">Your Neighbourhood</label>
+        <div class="map-wrap">
+          <div id="map"></div>
+          <div class="map-bar">
+            <div class="map-dot"></div>
+            <span id="map-txt">Tap the map to pin your Kiez</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="flabel">Number of Children</label>
+        <div class="stepper">
+          <button class="sp-btn" onclick="adj('kids',-1)">−</button>
+          <div class="sp-val" id="kids-val">1</div>
+          <button class="sp-btn" onclick="adj('kids',1)">+</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="flabel">Age of Youngest Child</label>
+        <div class="stepper">
+          <button class="sp-btn" onclick="adj('age',-1)">−</button>
+          <div class="sp-val sm" id="age-val">2 years old</div>
+          <button class="sp-btn" onclick="adj('age',1)">+</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="flabel">You Are</label>
+        <div class="chips" id="gender">
+          <button class="chip" onclick="pick('gender',this)">Mum</button>
+          <button class="chip" onclick="pick('gender',this)">Dad</button>
+          <button class="chip" onclick="pick('gender',this)">Non-binary</button>
+        </div>
+      </div>
+
+      <button class="btn-p" onclick="go(2)">Continue →</button>
+    </div>
+  </div>
+
+  <!-- ─── SCREEN 2: AVAILABILITY ─── -->
+  <div class="screen" id="s2">
+    <div class="hdr">
+      <button class="back-btn" onclick="go(1)">← Back</button>
+      <div class="v-badge">PostIdent Verified</div>
+    </div>
+    <div class="progress">
+      <div class="pdot"></div>
+      <div class="pdot on"></div>
+    </div>
+    <div class="content">
+      <div class="step-lbl">Step 2 of 2</div>
+      <h1 class="scr-title">When are you<br>available?</h1>
+      <p class="scr-sub">We only suggest families who match your schedule and style.</p>
+
+      <div class="field">
+        <label class="flabel">Pick a Date</label>
+        <div class="cal-month" id="cal-month">June 2026</div>
+        <div class="cal-grid" id="cal-lbls"></div>
+        <div class="cal-grid" id="cal-cells"></div>
+      </div>
+
+      <div class="field">
+        <label class="flabel">Time Slot</label>
+        <div class="time-grid">
+          <button class="tslot" onclick="pickSlot(this)">
+            <div class="ts-name">Morning</div>
+            <div class="ts-time">9:00 – 12:00</div>
+          </button>
+          <button class="tslot" onclick="pickSlot(this)">
+            <div class="ts-name">Afternoon</div>
+            <div class="ts-time">13:00 – 17:00</div>
+          </button>
+          <button class="tslot" onclick="pickSlot(this)">
+            <div class="ts-name">After School</div>
+            <div class="ts-time">15:00 – 18:00</div>
+          </button>
+          <button class="tslot" onclick="pickSlot(this)">
+            <div class="ts-name">Weekend</div>
+            <div class="ts-time">All day</div>
+          </button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="flabel">Type of Activity</label>
+        <div class="chips" id="activity">
+          <button class="chip" onclick="pick('activity',this)">🌳 Spielplatz</button>
+          <button class="chip" onclick="pick('activity',this)">🌿 Park Walk</button>
+          <button class="chip" onclick="pick('activity',this)">🏠 Home Playdate</button>
+          <button class="chip" onclick="pick('activity',this)">☕ Café Meetup</button>
+          <button class="chip" onclick="pick('activity',this)">🎨 Creative Play</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="flabel">Who Will Be There</label>
+        <div class="chips" id="parents">
+          <button class="chip" onclick="pick('parents',this)">👩 Mum(s)</button>
+          <button class="chip" onclick="pick('parents',this)">👨 Dad(s)</button>
+          <button class="chip" onclick="pick('parents',this)">👨‍👩‍👧 Both Welcome</button>
+        </div>
+      </div>
+
+      <button class="btn-p" onclick="startMatch()">Find My Village ✦</button>
+    </div>
+  </div>
+
+  <!-- ─── SCREEN 3: MATCHING ─── -->
+  <div class="screen" id="s3" style="align-items:center;justify-content:center;text-align:center;padding:40px 28px;position:relative;">
+    <div class="pulse-wrap" id="pulse-wrap">
+      <div class="pring"></div>
+      <div class="pring"></div>
+      <div class="pring"></div>
+      <div class="pcenter">🏘️</div>
+    </div>
+    <h2 class="match-ttl" id="match-ttl">Finding your<br>village…</h2>
+    <p class="match-sub-txt" id="match-sub">Searching verified families<br>in your Kiez</p>
+  </div>
+
+  <!-- ─── SCREEN 4: MATCH FOUND ─── -->
+  <div class="screen" id="s4">
+    <div class="match-body">
+
+      <div class="mbadge">Match Found</div>
+      <h1 class="match-name">The <span>Thompson</span><br>Family</h1>
+      <p class="match-dist">📍 0.4 km · Prenzlauer Berg · PostIdent Verified</p>
+
+      <div class="fcard">
+        <div class="favatar-row">
+          <div class="favatar">👨‍👩‍👦</div>
+          <div>
+            <div class="fname">Thompson Family</div>
+            <div class="fcomp">Mum, Dad &amp; little Felix</div>
+          </div>
+        </div>
+
+        <div class="fdetail-grid">
+          <div class="fdetail">
+            <div class="dlbl">Child</div>
+            <div class="dval">Felix, 2 yrs</div>
+          </div>
+          <div class="fdetail">
+            <div class="dlbl">Activity</div>
+            <div class="dval">🌳 Spielplatz</div>
+          </div>
+          <div class="fdetail">
+            <div class="dlbl">Available</div>
+            <div class="dval">Sat Afternoon</div>
+          </div>
+          <div class="fdetail">
+            <div class="dlbl">Parents</div>
+            <div class="dval">Both Welcome</div>
+          </div>
+        </div>
+
+        <div class="dlbl" style="margin-bottom:8px;">In Common</div>
+        <div class="ctags">
+          <div class="ctag">Same Kiez</div>
+          <div class="ctag">Similar Ages</div>
+          <div class="ctag">Outdoor Lovers</div>
+          <div class="ctag">Weekend Free</div>
+        </div>
+      </div>
+
+      <div class="why-box">
+        <div class="why-lbl">Why We Matched You</div>
+        <div class="why-txt">Felix and your child are both 2 years old and within walking distance. The Thompsons prefer outdoor Spielplatz on weekend afternoons — exactly what you selected.</div>
+      </div>
+
+      <div class="action-row">
+        <button class="btn-decline" onclick="doDecline()">✕ &nbsp;Decline</button>
+        <button class="btn-accept" onclick="doAccept()">✓ &nbsp;Accept</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ─── SCREEN 5: ACCEPTED ─── -->
+  <div class="screen" id="s5" style="align-items:center;justify-content:center;text-align:center;padding:50px 28px;min-height:100vh;">
+    <div class="s-icon">🏘️</div>
+    <h2 class="s-title">Your village<br>just grew.</h2>
+    <p class="s-sub">We've let the Thompson family know. Expect a message from them shortly to plan your first Spielplatz meetup.</p>
+
+    <div class="next-steps">
+      <div class="ns-lbl">What Happens Next</div>
+      <div class="ns-row"><span class="ns-n">1.</span>The Thompson family gets notified</div>
+      <div class="ns-row"><span class="ns-n">2.</span>You'll connect via our secure in-app chat</div>
+      <div class="ns-row"><span class="ns-n">3.</span>Meet at your local Spielplatz this weekend</div>
+    </div>
+
+    <p class="s-footer">It takes a village.<br><em style="color:var(--yellow)">You're building yours.</em></p>
+  </div>
+
+</div><!-- .app -->
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ── STATE ── */
+let kids = 1, age = 2;
+let mapInited = false, mapObj, mapMarker;
+
+/* ── NAVIGATION ── */
+function go(n) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const t = document.getElementById('s' + n);
+  if (t) { t.classList.add('active'); window.scrollTo(0,0); }
+  if (n === 1 && !mapInited) setTimeout(initMap, 150);
+  if (n === 2) buildCal();
+}
+
+/* ── MAP ── */
+function initMap() {
+  mapInited = true;
+  mapObj = L.map('map', {
+    center: [52.520, 13.405], zoom: 12,
+    zoomControl: false, attributionControl: false
+  });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    subdomains: 'abcd', maxZoom: 19
+  }).addTo(mapObj);
+
+  mapObj.on('click', function(e) {
+    if (mapMarker) mapObj.removeLayer(mapMarker);
+    mapMarker = L.circleMarker(e.latlng, {
+      radius: 9, fillColor: '#F5C430', color: '#0D1B24',
+      weight: 2, opacity: 1, fillOpacity: 1
+    }).addTo(mapObj);
+
+    fetch('https://nominatim.openstreetmap.org/reverse?lat='+e.latlng.lat+'&lon='+e.latlng.lng+'&format=json')
+      .then(r => r.json())
+      .then(d => {
+        const loc = d.address.suburb || d.address.neighbourhood || d.address.district || 'Your Kiez';
+        document.getElementById('map-txt').textContent = loc;
+      }).catch(() => {
+        document.getElementById('map-txt').textContent = 'Location pinned';
+      });
+  });
+}
+
+/* ── STEPPERS ── */
+const ageLabels = ['Newborn','1 year old','2 years old','3 years old','4 years old','5 years old','6 years old'];
+function adj(type, d) {
+  if (type === 'kids') {
+    kids = Math.max(1, Math.min(6, kids + d));
+    document.getElementById('kids-val').textContent = kids;
+  } else {
+    age = Math.max(0, Math.min(6, age + d));
+    document.getElementById('age-val').textContent = ageLabels[age];
+  }
+}
+
+/* ── CHIPS ── */
+function pick(groupId, el) {
+  document.getElementById(groupId).querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+  el.classList.add('on');
+}
+
+/* ── TIME SLOTS ── */
+function pickSlot(el) {
+  document.querySelectorAll('.tslot').forEach(t => t.classList.remove('on'));
+  el.classList.add('on');
+}
+
+/* ── CALENDAR ── */
+function buildCal() {
+  const days = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+  document.getElementById('cal-lbls').innerHTML =
+    days.map(d => `<div class="cal-day-lbl">${d}</div>`).join('');
+
+  // June 2026 — 1st is a Monday (offset 0)
+  const daysInJune = 30;
+  let html = '';
+  for (let d = 1; d <= daysInJune; d++) {
+    const past = d < 13;
+    const today = d === 13;
+    let cls = 'cal-cell';
+    let click = '';
+    if (!past) {
+      cls += today ? ' today' : ' avail';
+      click = `onclick="pickDate(this)"`;
+    }
+    html += `<div class="${cls}" ${click}>${d}</div>`;
+  }
+  document.getElementById('cal-cells').innerHTML = html;
+}
+
+function pickDate(el) {
+  document.querySelectorAll('#cal-cells .cal-cell').forEach(c => c.classList.remove('picked'));
+  el.classList.add('picked');
+}
+
+/* ── MATCHING FLOW ── */
+function startMatch() {
+  go(3);
+
+  // Scatter family nodes around the pulse rings
+  const s3 = document.getElementById('s3');
+  const nodes = [
+    {top:'12%', left:'8%',  em:'👨‍👩‍👧', delay:350},
+    {top:'14%', right:'9%', em:'👩‍👦',  delay:650},
+    {top:'50%', left:'5%',  em:'👨‍👧‍👦', delay:900},
+    {top:'52%', right:'6%', em:'👪',   delay:1100},
+    {top:'72%', left:'12%', em:'👩‍👩‍👧', delay:1300},
+    {top:'70%', right:'11%',em:'👨‍👦',  delay:1500},
+  ];
+
+  nodes.forEach(n => {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = 'fnode';
+      el.textContent = n.em;
+      Object.assign(el.style, {
+        top: n.top || 'auto',
+        bottom: n.bottom || 'auto',
+        left: n.left || 'auto',
+        right: n.right || 'auto',
+        position: 'absolute',
+      });
+      s3.appendChild(el);
+    }, n.delay);
+  });
+
+  // At 3s: flash "Match found!" then transition
+  setTimeout(() => {
+    const ttl = document.getElementById('match-ttl');
+    const sub = document.getElementById('match-sub');
+    ttl.textContent = 'Match found!';
+    ttl.style.color = '#F5C430';
+    sub.textContent = 'A verified family nearby';
+
+    // Clear nodes before transitioning
+    setTimeout(() => {
+      s3.querySelectorAll('.fnode').forEach(n => n.remove());
+      go(4);
+    }, 900);
+  }, 3000);
+}
+
+/* ── ACCEPT / DECLINE ── */
+function doAccept() { go(5); }
+function doDecline() {
+  if (confirm('We\'ll keep searching for your perfect match!')) {
+    go(1); // restart demo
+  }
+}
+
+/* ── INIT ── */
+window.addEventListener('load', () => {
+  initMap();
+  buildCal();
+});
+</script>
+</body>
+</html>
